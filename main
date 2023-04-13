@@ -2,8 +2,6 @@
 
 source <(curl -s https://raw.githubusercontent.com/cpiteam/logo/main/logo)
 
-printLogo
-
 read -r -p "Enter node moniker: " NODE_CPI
 
 CHAIN_ID="orbit-alpha-1"
