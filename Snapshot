@@ -1,0 +1,4 @@
+#!/bin/bash
+
+URL="https://snapshots-testnet.r1m-team.com/defund/orbit-alpha-1_latest.tar.lz4"
+curl -L $URL | lz4 -dc - | tar -xf - -C $HOME/.defund
