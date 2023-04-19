@@ -5,7 +5,7 @@ bash <(curl -s https://raw.githubusercontent.com/cpiteam/logo/main/logo) && slee
 sudo apt update
 sudo apt install -y curl git jq lz4 build-essential unzip
 
-bash <(curl -s "https://raw.githubusercontent.com/cpiteam/DeFund/main/dock include")
+bash <(curl -s https://raw.githubusercontent.com/cpiteam/DeFund/main/dock include)
 source ~/.bash_profile
 
 cd ~ || exit
