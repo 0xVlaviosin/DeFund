@@ -1,65 +1,44 @@
 #!/bin/bash
 
-source <(curl -s https://raw.githubusercontent.com/cpiteam/logo/main/logo)
+sudo apt update
+sudo apt install -y curl git jq lz4 build-essential unzip
 
-read -r -p "Enter node moniker: " NODE_CPI
-
-CHAIN_ID="orbit-alpha-1"
-CHAIN_DENOM="ufetf"
-BINARY_NAME="defundd"
-BINARY_VERSION_TAG="v0.2.6"
-CHEAT_SHEET="https://nodes.r1m-team.com/defund"
-
-printDelimiter
-echo -e "Node moniker:       $NODE_CPI"
-echo -e "Chain id:           $CHAIN_ID"
-echo -e "Chain demon:        $CHAIN_DENOM"
-printDelimiter && sleep 1
-
-source <(curl -s https://raw.githubusercontent.com/cpiteam/DeFund/main/dock)
-
-echo "" && printGreen "Building binaries..." && sleep 1
+bash <(curl -s "https://raw.githubusercontent.com/cpiteam/DeFund/main/dock%20include")
+source .bash_profile
 
 cd || return
 rm -rf defund
 git clone https://github.com/defund-labs/defund.git
 cd defund || return
-git checkout $BINARY_VERSION_TAG
+git checkout # 0.2.6
 make install
 defundd version # 0.2.6
 
 defundd config keyring-backend os
-defundd config chain-id $CHAIN_ID
-defundd init "$NODE_CPI" --chain-id $CHAIN_ID
+defundd config chain-id orbit-alpha-1
+defundd init "<Your moniker>" --chain-id orbit-alpha-1
 
 # Download genesis and addrbook
 curl -Ls https://raw.githubusercontent.com/defund-labs/testnet/main/orbit-alpha-1/genesis.json > $HOME/.defund/config/genesis.json
-curl -Ls https://api.nodes.guru/defund_addrbook.json > $HOME/.defund/config/addrbook.json
+curl -Ls https://snapshots-testnet.r1m-team.com/defund/addrbook.json > $HOME/.defund/config/addrbook.json
 
-CONFIG_TOML=$HOME/.defund/config/config.toml
-PEERS=""
-sed -i.bak -e "s/^persistent_peers *=.*/persistent_peers = \"$PEERS\"/" $CONFIG_TOML
-SEEDS="f902d7562b7687000334369c491654e176afd26d@170.187.157.19:26656,2b76e96658f5e5a5130bc96d63f016073579b72d@rpc-1.defund.nodes.guru:45656"
-sed -i.bak -e "s/^seeds =.*/seeds = \"$SEEDS\"/" $CONFIG_TOML
-
-APP_TOML=$HOME/.defund/config/app.toml
+APP_TOML="~/.defund/config/app.toml"
 sed -i 's|^pruning *=.*|pruning = "custom"|g' $APP_TOML
 sed -i 's|^pruning-keep-recent  *=.*|pruning-keep-recent = "100"|g' $APP_TOML
-sed -i 's|^pruning-keep-every *=.*|pruning-keep-every = "0"|g' $APP_TOML
-sed -i 's|^pruning-interval *=.*|pruning-interval = "19"|g' $APP_TOML
+sed -i 's|^pruning-interval *=.*|pruning-interval = "10"|g' $APP_TOML
+
+CONFIG_TOML="~/.defund/config/config.toml"
+SEEDS="f902d7562b7687000334369c491654e176afd26d@170.187.157.19:26656,2b76e96658f5e5a5130bc96d63f016073579b72d@rpc-1.defund.nodes.guru:45656"
+PEERS=""
+sed -i.bak -e "s/^persistent_peers *=.*/persistent_peers = \"$PEERS\"/" $CONFIG_TOML
+sed -i.bak -e "s/^seeds =.*/seeds = \"$SEEDS\"/" $CONFIG_TOML
+external_address=$(wget -qO- eth0.me)
+sed -i.bak -e "s/^external_address *=.*/external_address = \"$external_address:26656\"/" $CONFIG_TOML
+sed -i 's|^minimum-gas-prices *=.*|minimum-gas-prices = "0.025ufetf"|g' $CONFIG_TOML
+sed -i 's|^prometheus *=.*|prometheus = true|' $CONFIG_TOML
+sed -i 's/max_num_inbound_peers =.*/max_num_inbound_peers = 30/g' $CONFIG_TOML
+sed -i 's/max_num_outbound_peers =.*/max_num_outbound_peers = 30/g' $CONFIG_TOML
 sed -i -e "s/^filter_peers *=.*/filter_peers = \"true\"/" $CONFIG_TOML
-indexer="null"
-sed -i -e "s/^indexer *=.*/indexer = \"$indexer\"/" $CONFIG_TOML
-sed -i 's|^minimum-gas-prices *=.*|minimum-gas-prices = "0.0001ufetf"|g' $APP_TOML
-
-# Customize ports
-CLIENT_TOML=$HOME/.defund/config/client.toml
-sed -i.bak -e "s/^external_address *=.*/external_address = \"$(wget -qO- eth0.me):$PORT_PPROF_LADDR\"/" $CONFIG_TOML
-sed -i.bak -e "s%^proxy_app = \"tcp://127.0.0.1:26658\"%proxy_app = \"tcp://127.0.0.1:$PORT_PROXY_APP\"%; s%^laddr = \"tcp://127.0.0.1:26657\"%laddr = \"tcp://127.0.0.1:$PORT_RPC\"%; s%^pprof_laddr = \"localhost:6060\"%pprof_laddr = \"localhost:$PORT_P2P\"%; s%^laddr = \"tcp://0.0.0.0:26656\"%laddr = \"tcp://0.0.0.0:$PORT_PPROF_LADDR\"%; s%^prometheus_listen_addr = \":26660\"%prometheus_listen_addr = \":$PORT_PROMETHEUS\"%" $CONFIG_TOML && \
-sed -i.bak -e "s%^address = \"0.0.0.0:9090\"%address = \"0.0.0.0:$PORT_GRPC\"%; s%^address = \"0.0.0.0:9091\"%address = \"0.0.0.0:$PORT_GRPC_WEB\"%; s%^address = \"tcp://0.0.0.0:1317\"%address = \"tcp://0.0.0.0:$PORT_API\"%" $APP_TOML && \
-sed -i.bak -e "s%^node = \"tcp://localhost:26657\"%node = \"tcp://localhost:$PORT_RPC\"%" $CLIENT_TOML
-
-printGreen "Starting service and synchronization..." && sleep 1
 
 sudo tee /etc/systemd/system/defundd.service > /dev/null << EOF
 [Unit]
@@ -75,20 +54,25 @@ LimitNOFILE=10000
 WantedBy=multi-user.target
 EOF
 
-defundd tendermint unsafe-reset-all --home $HOME/.defund --keep-addr-book
+# Snapshots
+URL="https://snapshots-testnet.r1m-team.com/defund/orbit-alpha-1_latest.tar.lz4"
+curl -L $URL | tar -Ilz4 -xf - -C $HOME/.defund
 
-# Add snapshot here
-bash <(curl -s https://raw.githubusercontent.com/cpiteam/DeFund/main/Snapshot)
+CONFIG_TOML="~/.defund/config/config.toml"
+sed -i 's/timeout_propose =.*/timeout_propose = "100ms"/g' $CONFIG_TOML
+sed -i 's/timeout_propose_delta =.*/timeout_propose_delta = "500ms"/g' $CONFIG_TOML
+sed -i 's/timeout_prevote =.*/timeout_prevote = "100ms"/g' $CONFIG_TOML
+sed -i 's/timeout_prevote_delta =.*/timeout_prevote_delta = "500ms"/g' $CONFIG_TOML
+sed -i 's/timeout_precommit =.*/timeout_precommit = "100ms"/g' $CONFIG_TOML
+sed -i 's/timeout_precommit_delta =.*/timeout_precommit_delta = "500ms"/g' $CONFIG_TOML
+sed -i 's/timeout_commit =.*/timeout_commit = "1s"/g' $CONFIG_TOML
+sed -i 's/skip_timeout_commit =.*/skip_timeout_commit = false/g' $CONFIG_TOML
 
 sudo systemctl daemon-reload
 sudo systemctl enable defundd
 sudo systemctl start defundd
 
-printDelimiter
-printGreen "Check logs:            sudo journalctl -u $BINARY_NAME -f -o cat"
-printGreen "Check synchronization: $BINARY_NAME status 2>&1 | jq .SyncInfo.catching_up"
-printGreen "Check our cheat sheet: $CHEAT_SHEET"
-printDelimiter
+sudo journalctl -u defundd -f -o cat
  
  bash <(curl -s https://raw.githubusercontent.com/cpiteam/logo/main/Logo%20last)
  printGreen "CPI.TM are the best"
